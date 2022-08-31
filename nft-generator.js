@@ -46,11 +46,14 @@ function generateNFTs() {
 
   // generate desired count of different random numbers in the range
   let faceCodes = [];
-  while (faceCodes.length < config.desiredCount) {
+  while (faces.length < config.desiredCount) {
     let code = getRandomInt(combinations);
-    if (!bnIncludes(faceCodes, code))
+    if (!bnIncludes(faceCodes, code)) {
       faceCodes.push(code);
+    }
   }
+  
+  console.log('faceCodes', faceCodes.length)
 
   // Convert generated codes into NFT properties
   let faces = [];
@@ -76,7 +79,7 @@ function generateNFTs() {
       face[eyeIndex] = attributes[eyeIndex].attrNames.findIndex(name => name === eye) + 1;
     }
 
-    if (smoke === '"Do not smoke') {
+    if (smoke === 'Do not smoke') {
       face[smokeIndex] = attributes[smokeIndex].attrNames.findIndex(name => name === smoke) + 1;
     }
 
@@ -85,7 +88,7 @@ function generateNFTs() {
     }
 
     if (top === 'Empty head') {
-      face[topIndex] = attributes[topIndex].attrNames.findIndex(name => name === pattern) + 1;
+      face[topIndex] = attributes[topIndex].attrNames.findIndex(name => name === top) + 1;
     }
 
     if (mouth === 'Default mouth') {
@@ -95,7 +98,7 @@ function generateNFTs() {
     faces.push(face);
   }
 
-
+  // console.log('faces', faces.length);
 
   // Save faces
   if (!fs.existsSync(config.outputFolder)){

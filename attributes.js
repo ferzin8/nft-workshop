@@ -23,7 +23,7 @@ const attributes = [
                                                                    "Default mouth", "Default mouth", "Default mouth", "Default mouth",
                                                                    "Default mouth", "Default mouth"] },
     { name: "Cigarette",    count: 5, required: true, attrNames: ["It's just a cigarette", "Green cigarette", "Smoking pipe", "Do not smoke",
-                                                                  "Don't smoke"] }
+                                                                  "Do not smoke"] }
   ];
 
 module.exports = attributes;

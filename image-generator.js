@@ -2,27 +2,11 @@ const fs = require("fs");
 const mergeImg = require('merge-img');
 const config = require('./config');
 const attributes = require('./attributes');
-const { Worker, isMainThread, parentPort } = require('node:worker_threads');
-const Queue = require("queue-promise");
+const { spawn, Pool, Worker } = require("threads");
 
 let faces;
 
-function mergeImagesToPng(images, output) {
-
-  return new Promise((resolve) => {
-    const worker = new Worker('./generate-image.worker.js');
-
-    worker.postMessage({images, output});
-
-    worker.once('message', (message) => {
-      resolve(message);
-    });
-  })
-
-
-}
-
-async function saveFaceByAttributes(arr, outFile) {
+function getImageData(arr) {
   let images = [];
 
   for (let i=0; i < arr.length; i++) {
@@ -37,8 +21,7 @@ async function saveFaceByAttributes(arr, outFile) {
     }
   }
 
-  // Generate image
-  await mergeImagesToPng(images, outFile);
+  return images;
 }
 
 function printAttributes(i) {
@@ -54,22 +37,23 @@ function printAttributes(i) {
 
 async function generateImages() {
 
-  const queue = new Queue({
-    concurrent: 10,
-  });
+  const pool = Pool(() => spawn(new Worker("./generate-image.worker")), 10 /* optional size */);
 
   for (let i=0; i<faces.length; i++) {
-  // for (let i=0; i<100; i++) {
 
     const face = faces[i];
-    const file = `${config.outputFolder}/nft_image_${i+1}.png`;
+    const output = `${config.outputFolder}/${config.imagePrefix}${i+1}.png`;
 
-    printAttributes(i);
+    const images = getImageData(face);
 
-    queue.enqueue(async () => await saveFaceByAttributes(face, file));
+    pool.queue(async (generateImage) => {
+      const num = await generateImage({ images, output, num: i });
+      printAttributes(num);
+    });
   }
 
-  await new Promise(resolve => queue.on('end', resolve));
+  await pool.completed()
+  await pool.terminate()
 
 }
 
