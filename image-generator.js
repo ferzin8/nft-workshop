@@ -28,7 +28,7 @@ function printAttributes(i) {
   let attrs = '[' + faces[i] + '] => ';
   for (let j=0; j<attributes.length; j++) {
     if (faces[i][j] > 0) {
-      attrs += attributes[j].attrNames[faces[i][j]-1] + ", ";
+      attrs += attributes[j].values[faces[i][j]-1] + ", ";
     }
   }
 

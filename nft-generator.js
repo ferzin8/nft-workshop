@@ -4,7 +4,44 @@ const config = require('./config');
 const attributes = require('./attributes');
 
 function getRandomInt(max) {
-  return BigNumber.random(20).multipliedBy(max).integerValue();
+  return BigNumber.random(20)
+      .multipliedBy(max - 1)
+      .plus(1)
+      .integerValue();
+}
+
+function attributeName(i) {
+  return attributes[i].name;
+}
+
+function propertyName(i, j) {
+  const property = attributes[i].values[j - 1];
+  return property.value || property;
+}
+
+function logAttributes(prefix, face) {
+  console.log(prefix, face.map((value, index) => {
+    return [attributeName(index), propertyName(index, value)];
+  }));
+}
+
+function getLenByWeights(values, required = false) {
+  const weight = values.reduce((acc, v) => {
+    return acc + (typeof v === "object" && v.weight ? v.weight : 1);
+  }, 0);
+  return weight + !+required;
+}
+
+function mapValueByWeight(values, property) {
+  const map = {};
+  values.forEach((value, index) => {
+    const weight = typeof value === "object" && value.weight ? value.weight : 1;
+    const lastIndex = Object.keys(map).length;
+    for (let i=0; i<weight; i++) {
+      map[lastIndex + i + 1] = index + 1;
+    }
+  });
+  return property ? map[property] : property;
 }
 
 function codeToArray(code) {
@@ -12,18 +49,16 @@ function codeToArray(code) {
 
   for (let i=attributes.length-1; i>=0; i--) {
 
-    // property gets the actual value of property i...
-    let property = parseInt(code.mod(attributes[i].count).toFixed());
+    const len = getLenByWeights(
+        attributes[i].values,
+        attributes[i].required,
+    );
 
-    // If this is a required property, the actual value ranges from 1 to attributes[i].count, so that required properties are never 0
-    if (attributes[i].required) {
-      arr[i] = property+1;
-    }
-    // If this is an optional property, the actual value ranges from 0 to attributes[i].count. 0 means this trait is not present
-    else {
-      arr[i] = property;
-    }
-    code = code.minus(arr[i]).dividedBy(attributes[i].count).integerValue();
+    let property = parseInt(code.mod(len).toFixed()) + +attributes[i].required;
+
+    arr[i] = mapValueByWeight(attributes[i].values, property);
+
+    code = code.minus(arr[i]).dividedBy(len).integerValue();
   }
 
   return arr;
@@ -40,65 +75,40 @@ function generateNFTs() {
   // Get a bigint of possible combinations
   let combinations = new BigNumber(1);
   for (let i=0; i<attributes.length; i++) {
-    combinations = combinations.multipliedBy(attributes[i].required ? attributes[i].count : (attributes[i].count + 1));
+    combinations = combinations.multipliedBy(
+        getLenByWeights(attributes[i].values, attributes[i].required)
+    );
   }
   console.log(`Possible combinations: ${combinations.toString()}`);
 
   // generate desired count of different random numbers in the range
   let faceCodes = [];
-  while (faces.length < config.desiredCount) {
+  let faces = [];
+  while (
+      faces.length < config.desiredCount &&
+      combinations.isGreaterThan(faceCodes.length)
+  ) {
     let code = getRandomInt(combinations);
     if (!bnIncludes(faceCodes, code)) {
       faceCodes.push(code);
+
+      const face = codeToArray(code);
+      const mouthIndex = attributes.findIndex(a => a.name === 'Mouth');
+      const smokeIndex = attributes.findIndex(a => a.name === 'Cigarette');
+      const mouth = attributes[mouthIndex].values[face[mouthIndex] - 1];
+      const smoke = attributes[smokeIndex].values[face[smokeIndex] - 1];
+
+      if (mouth === 'BDSM GAG' && smoke?.value !== 'Do not smoke') {
+        continue;
+      }
+
+      logAttributes('Randomized NFT:', face);
+
+      faces.push(face);
     }
   }
-  
-  console.log('faceCodes', faceCodes.length)
 
-  // Convert generated codes into NFT properties
-  let faces = [];
-  for (let i=0; i<faceCodes.length; i++) {
-    const face = codeToArray(faceCodes[i]);
-
-    const mouthIndex = attributes.findIndex(a => a.name === 'Mouth');
-    const smokeIndex = attributes.findIndex(a => a.name === 'Cigarette');
-    const topIndex = attributes.findIndex(a => a.name === 'Head');
-    const eyeIndex = attributes.findIndex(a => a.name === 'Eyes');
-    const patternIndex = attributes.findIndex(a => a.name === 'Skin pattern');
-    const mouth = attributes[mouthIndex].attrNames[face[mouthIndex] - 1];
-    const smoke = attributes[smokeIndex].attrNames[face[smokeIndex] - 1];
-    const eye = attributes[eyeIndex].attrNames[face[eyeIndex] - 1];
-    const pattern = attributes[patternIndex].attrNames[face[patternIndex] - 1];
-    const top = attributes[topIndex].attrNames[face[topIndex] - 1];
-
-    if (mouth === 'BDSM GAG' && smoke !== 'Do not smoke') {
-      continue;
-    }
-
-    if (eye === 'Default eye') {
-      face[eyeIndex] = attributes[eyeIndex].attrNames.findIndex(name => name === eye) + 1;
-    }
-
-    if (smoke === 'Do not smoke') {
-      face[smokeIndex] = attributes[smokeIndex].attrNames.findIndex(name => name === smoke) + 1;
-    }
-
-    if (pattern === 'Without pattern') {
-      face[patternIndex] = attributes[patternIndex].attrNames.findIndex(name => name === pattern) + 1;
-    }
-
-    if (top === 'Empty head') {
-      face[topIndex] = attributes[topIndex].attrNames.findIndex(name => name === top) + 1;
-    }
-
-    if (mouth === 'Default mouth') {
-      face[mouthIndex] = attributes[mouthIndex].attrNames.findIndex(name => name === mouth) + 1;
-    }
-
-    faces.push(face);
-  }
-
-  // console.log('faces', faces.length);
+  console.log('faces', faces.length);
 
   // Save faces
   if (!fs.existsSync(config.outputFolder)){
@@ -151,7 +161,6 @@ function generateSchema() {
 
 function main() {
   generateNFTs();
-  generateSchema();
 }
 
 main();

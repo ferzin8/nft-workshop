@@ -11,7 +11,7 @@ function printAttributes(i) {
     let attrs = '[' + faces[i] + '] => ';
     for (let j=0; j<attributes.length; j++) {
         if (faces[i][j] > 0) {
-            attrs += attributes[j].attrNames[faces[i][j]-1] + ", ";
+            attrs += attributes[j].values[faces[i][j]-1] + ", ";
         }
     }
 
@@ -39,7 +39,7 @@ async function uploadZip(sdk) {
 
     zip.writeZip(zipPath);
 
-    const { cid } = sdk.ipfs.uploadZip({
+    const { cid } = await sdk.ipfs.uploadZip({
         file: fs.readFileSync(zipPath),
     });
 
@@ -52,8 +52,7 @@ async function uploadZip(sdk) {
 (async () => {
     const provider = new KeyringProvider({ type: 'sr25519'});
     await provider.init();
-    provider.addSeed(config.ownerSeed);
-    const account = await provider.first();
+    const account = provider.addSeed(config.ownerSeed);
     const signer = account?.getSigner();
 
     const sdk = new Client({
@@ -61,7 +60,8 @@ async function uploadZip(sdk) {
         baseUrl: config.restEndpoint,
     });
 
-    const ipfsCid = await uploadZip(sdk);
+    const ipfsCid = config.ipfsCid || await uploadZip(sdk);
+    console.log('ipfsCid', ipfsCid);
 
     const collection = await sdk.collections.get({ collectionId: config.collectionId });
 
@@ -70,11 +70,15 @@ async function uploadZip(sdk) {
 
     const commonArgs = {
         address: account.instance.address,
-        collectionId: config.collectionId,
+        collectionId: collection.id,
     };
 
-    const startItem = 1;
-    for (let i=startItem; i<=config.desiredCount; i++) {
+    const { tokenId } = await sdk.collections.lastTokenId({
+        collectionId: collection.id,
+    });
+    const from = tokenId + 1;
+    const to = config.desiredCount;
+    for (let i=from; i<=to; i++) {
         const face = faces[i-1];
         if (face) {
             console.log(`=================================================\nCreating item ${i} from attributes [${faces[i-1]}]`);
@@ -87,6 +91,8 @@ async function uploadZip(sdk) {
 
             const data = {
                 encodedAttributes,
+                // attributes
+                // properties
                 image: {
                     ipfsCid: `${ipfsCid}/${config.imagePrefix}${i}.png`,
                 },
@@ -94,11 +100,11 @@ async function uploadZip(sdk) {
 
             block.push(data);
         }
-        if (block.length === 50 || i === config.desiredCount) {
-            // await sdk.tokens.createMultiple.submitWaitResult({
-            //     ... commonArgs,
-            //     data: block,
-            // });
+        if (block.length === perBlock || i === config.desiredCount) {
+            await sdk.tokens.createMultiple.submitWaitResult({
+                ... commonArgs,
+                data: block,
+            });
             block = [];
         }
     }
